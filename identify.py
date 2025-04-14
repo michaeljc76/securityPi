@@ -46,7 +46,9 @@ else:
 
 # Start camera
 picam = Picamera2()
-picam.configure(picam.preview_configuration(main={"format": "RGB888", "size": (640, 480)}))
+
+preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (640, 480)})
+picam.configure(preview_config)
 picam.start()
 
 while True:
