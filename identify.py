@@ -3,6 +3,9 @@ import cv2
 import mediapipe as mp
 import face_recognition
 import numpy as np
+import RPi.GPIO as gpio
+import time
+
 
 # Initialize MediaPipe face detection
 mp_face_detection = mp.solutions.face_detection
@@ -44,12 +47,30 @@ if encodings_jay:  # Check if face encoding is found
 else:
     print("No face found in Jay's image")
 
-# Start camera
+# SERVO SETUP
+GPIO.setmode(GPIO.BCM)  # Use Broadcom pin numbering
+servo_pin = 17
+GPIO.setup(servo_pin, GPIO.OUT)
+
+# Set up PWM for the servo
+servo_pwm = GPIO.PWM(servo_pin, 50)  # 50Hz PWM frequency
+servo_pwm.start(0)  # Start with 0% duty cycle
+
+# Function to set servo angle
+def set_servo_angle(angle):
+    duty_cycle = (angle / 18) + 2
+    servo_pwm.ChangeDutyCycle(duty_cycle)
+    time.sleep(1)  # Give the servo time to reach the position
+    servo_pwm.ChangeDutyCycle(0)  # Stop sending PWM signal
+
+# CAMERA SETUP
 picam = Picamera2()
 
 preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (640, 480)})
 picam.configure(preview_config)
 picam.start()
+
+detected_name = None  # Variable to store the name of the detected person
 
 while True:
     frame = picam.capture_array()
@@ -84,7 +105,6 @@ while True:
             try:
                 face_location = [(y1, x2, y2, x1)]  # top, right, bottom, left
                 encodings = face_recognition.face_encodings(rgb_frame, face_location)
-                #encodings = face_recognition.face_encodings(face_crop)
                 if encodings:
                     matches = face_recognition.compare_faces(known_faces, encodings[0])
                     name = "Unknown"
@@ -92,6 +112,9 @@ while True:
                     if True in matches:
                         match_index = matches.index(True)
                         name = known_names[match_index]
+                        detected_name = name  # Store the detected name
+                    else:
+                        detected_name = None  # No match found
                 else:
                     name = "No Encoding"
             except Exception as e:
@@ -101,6 +124,17 @@ while True:
             # Draw rectangle and name
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+    
+        # Move servo based on face detection
+    if detected_name in ["Steven", "Mike"]:
+        set_servo_angle(90)  # Move to 90 degrees if Steven or Mike is detected
+    else:
+        set_servo_angle(0)  # Move back to 0 degrees if neither is detected
+
+    cv2.imshow("Face Recognition with MediaPipe", frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
     cv2.imshow("Face Recognition with MediaPipe", frame)
 
@@ -108,4 +142,5 @@ while True:
         break
 
 cap.release()
+GPIO.cleanup()
 cv2.destroyAllWindows()
