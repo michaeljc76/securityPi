@@ -66,7 +66,7 @@ def set_servo_angle(angle):
 # CAMERA SETUP
 picam = Picamera2()
 
-preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (640, 480)})
+preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (1440, 1080)})
 picam.configure(preview_config)
 picam.start()
 
