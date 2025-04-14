@@ -1,3 +1,4 @@
+from picamera2 import Picamera2
 import cv2
 import mediapipe as mp
 import face_recognition
@@ -44,12 +45,12 @@ else:
     print("No face found in Jay's image")
 
 # Start camera
-cap = cv2.VideoCapture(0)
+picam = Picamera2()
+picam2.configure(picam2.preview_configuration(main={"format": "RGB888", "size": (640, 480)}))
+picam2.start()
 
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
+while True:
+    frame = picam.capture_array()
 
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_detection.process(rgb_frame)
