@@ -3,7 +3,7 @@ import cv2
 import mediapipe as mp
 import face_recognition
 import numpy as np
-import RPi.GPIO as gpio
+import RPi.GPIO as GPIO
 import time
 
 
