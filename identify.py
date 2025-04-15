@@ -76,11 +76,21 @@ GPIO.setup(BUZZER_PIN, GPIO.OUT)
 def buzz():
     pwm = GPIO.PWM(BUZZER_PIN, 1000)
     try:
-        pwm.start(50)  # 50% duty cycle
-        print("Buzzing...")
-        time.sleep(1)  # Buzz for 1 second
+        pwm = GPIO.PWM(BUZZER_PIN, FREQUENCY)
+
+        if pwm is None:
+            raise RuntimeError("Failed to initialize PWM. 'pwm' is None.")
+
+        pwm.start(DUTY_CYCLE)
+        print("Buzzing at 1kHz...")
+        time.sleep(1)
         pwm.stop()
         print("Stopped buzzing.")
+
+    except TypeError as e:
+        print(f"TypeError: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
     finally:
         GPIO.cleanup()
 
