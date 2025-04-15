@@ -1,53 +1,43 @@
 from picamera2 import Picamera2
 import cv2
-import numpy as np
+import RPi.GPIO as GPIO
 import time
 
-# Motion detection config
-motion_threshold = 500000  # Adjust this for sensitivity
-motion_timeout = 5         # Time (in seconds) to keep showing video after last motion
-prev_gray = None
-last_motion_time = 0
-camera_active = False
+# GPIO setup
+PIR_PIN = 4  # Adjust this to your PIR sensor's GPIO pin
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(PIR_PIN, GPIO.IN)
 
 # Camera setup
 picam = Picamera2()
 config = picam.create_preview_configuration(main={"format": "RGB888", "size": (640, 480)})
 picam.configure(config)
-picam.start()
+
+camera_active = False
 
 try:
     while True:
-        frame = picam.capture_array()
-        current_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        motion_detected = GPIO.input(PIR_PIN)
 
-        if prev_gray is None:
-            prev_gray = current_gray
-            continue
+        if motion_detected and not camera_active:
+            print("Motion detected! Activating camera...")
+            picam.start()
+            camera_active = True
 
-        # Compute absolute difference between current frame and previous
-        diff = cv2.absdiff(current_gray, prev_gray)
-        _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
-        motion_score = np.sum(thresh)
-
-        current_time = time.time()
-        if motion_score > motion_threshold:
-            last_motion_time = current_time
-            if not camera_active:
-                print("Motion detected! Showing camera feed.")
-                camera_active = True
-        elif camera_active and (current_time - last_motion_time > motion_timeout):
-            print("No motion. Hiding camera feed.")
+        elif not motion_detected and camera_active:
+            print("No motion. Stopping camera...")
             camera_active = False
+            picam.stop()
             cv2.destroyWindow("Live Feed")
 
         if camera_active:
+            frame = picam.capture_array()
             cv2.imshow("Live Feed", frame)
-
-        prev_gray = current_gray
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
 finally:
+    picam.stop()
+    GPIO.cleanup()
     cv2.destroyAllWindows()
