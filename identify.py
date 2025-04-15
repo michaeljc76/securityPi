@@ -74,9 +74,8 @@ def set_servo_angle(angle):
 GPIO.setup(BUZZER_PIN, GPIO.OUT)
 
 def buzz():
-    pwm = GPIO.PWM(BUZZER_PIN, 1000)
     try:
-        pwm = GPIO.PWM(BUZZER_PIN, FREQUENCY)
+        pwm = GPIO.PWM(BUZZER_PIN, 1000)
 
         if pwm is None:
             raise RuntimeError("Failed to initialize PWM. 'pwm' is None.")
