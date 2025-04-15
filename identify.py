@@ -57,11 +57,17 @@ servo_pwm = GPIO.PWM(servo_pin, 50)  # 50Hz PWM frequency
 servo_pwm.start(0)  # Start with 0% duty cycle
 
 # Function to set servo angle
+last_angle = None  # Track the last angle
+
 def set_servo_angle(angle):
+    global last_angle
+    if last_angle == angle:
+        return  # Skip if already at desired angle
+    last_angle = angle
     duty_cycle = (angle / 18) + 2
     servo_pwm.ChangeDutyCycle(duty_cycle)
-    time.sleep(1)  # Give the servo time to reach the position
-    servo_pwm.ChangeDutyCycle(0)  # Stop sending PWM signal
+    time.sleep(0.5)  # Reduced sleep for snappiness
+    servo_pwm.ChangeDutyCycle(0)  # Stop sending signal
 
 # CAMERA SETUP
 picam = Picamera2()
@@ -123,7 +129,7 @@ while True:
 
             # Draw rectangle and name
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 1)
     
         # Move servo based on face detection
     if detected_name in ["Steven", "Mike"]:
