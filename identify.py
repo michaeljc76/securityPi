@@ -129,8 +129,8 @@ while True:
 
             # Draw rectangle and name
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 1)
-    
+            cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 2)
+
         # Move servo based on face detection
     if detected_name in ["Steven", "Mike"]:
         set_servo_angle(90)  # Move to 90 degrees if Steven or Mike is detected
