@@ -72,26 +72,14 @@ def set_servo_angle(angle):
 
 # BUZZER SETUP
 GPIO.setup(BUZZER_PIN, GPIO.OUT)
+buzzer_pwm = GPIO.PWM(BUZZER_PIN, 1000)
 
 def buzz():
-    try:
-        pwm = GPIO.PWM(BUZZER_PIN, 1000)
-
-        if pwm is None:
-            raise RuntimeError("Failed to initialize PWM. 'pwm' is None.")
-
-        pwm.start(50)
-        print("Buzzing at 1kHz...")
-        time.sleep(1)
-        pwm.stop()
-        print("Stopped buzzing.")
-
-    except TypeError as e:
-        print(f"TypeError: {e}")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-    finally:
-        GPIO.cleanup()
+    buzzer_pwm.start(50)
+    print("Buzzing at 1kHz...")
+    time.sleep(1)
+    buzzer_pwm.stop()
+    print("Stopped buzzing.")
 
 # CAMERA SETUP
 picam = Picamera2()
