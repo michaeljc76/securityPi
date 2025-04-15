@@ -1,2 +1,3 @@
 email-1
-sender email:
+sender email: kimChaewonLeSera@yahoo.com
+Sender password: havQPi5y8rFutrG
