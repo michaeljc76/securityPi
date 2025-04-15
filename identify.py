@@ -80,7 +80,7 @@ def buzz():
         if pwm is None:
             raise RuntimeError("Failed to initialize PWM. 'pwm' is None.")
 
-        pwm.start(DUTY_CYCLE)
+        pwm.start(50)
         print("Buzzing at 1kHz...")
         time.sleep(1)
         pwm.stop()
