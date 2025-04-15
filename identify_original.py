@@ -6,8 +6,6 @@ import numpy as np
 import RPi.GPIO as GPIO
 import time
 
-SERVO_PIN = 17
-BUZZER_PIN = 23
 
 # Initialize MediaPipe face detection
 mp_face_detection = mp.solutions.face_detection
@@ -51,10 +49,11 @@ else:
 
 # SERVO SETUP
 GPIO.setmode(GPIO.BCM)  # Use Broadcom pin numbering
-GPIO.setup(SERVO_PIN, GPIO.OUT)
+servo_pin = 17
+GPIO.setup(servo_pin, GPIO.OUT)
 
 # Set up PWM for the servo
-servo_pwm = GPIO.PWM(SERVO_PIN, 50)  # 50Hz PWM frequency
+servo_pwm = GPIO.PWM(servo_pin, 50)  # 50Hz PWM frequency
 servo_pwm.start(0)  # Start with 0% duty cycle
 
 # Function to set servo angle
@@ -69,29 +68,6 @@ def set_servo_angle(angle):
     servo_pwm.ChangeDutyCycle(duty_cycle)
     time.sleep(0.5)  # Reduced sleep for snappiness
     servo_pwm.ChangeDutyCycle(0)  # Stop sending signal
-
-# BUZZER SETUP
-GPIO.setup(BUZZER_PIN, GPIO.OUT)
-
-def buzz():
-    try:
-        pwm = GPIO.PWM(BUZZER_PIN, 1000)
-
-        if pwm is None:
-            raise RuntimeError("Failed to initialize PWM. 'pwm' is None.")
-
-        pwm.start(50)
-        print("Buzzing at 1kHz...")
-        time.sleep(1)
-        pwm.stop()
-        print("Stopped buzzing.")
-
-    except TypeError as e:
-        print(f"TypeError: {e}")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-    finally:
-        GPIO.cleanup()
 
 # CAMERA SETUP
 picam = Picamera2()
@@ -159,7 +135,6 @@ while True:
     if detected_name in ["Steven", "Mike"]:
         set_servo_angle(90)  # Move to 90 degrees if Steven or Mike is detected
     else:
-        buzz()
         set_servo_angle(0)  # Move back to 0 degrees if neither is detected
 
     cv2.imshow("Face Recognition with MediaPipe", frame)
