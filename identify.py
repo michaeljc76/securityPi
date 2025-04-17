@@ -146,9 +146,11 @@ while True:
         # Move servo based on face detection
     if detected_name in ["Steven", "Mike"]:
         set_servo_angle(90)  # Move to 90 degrees if Steven or Mike is detected
-    else:
+    elif detected_name == "Unknown":
         buzz()
         set_servo_angle(0)  # Move back to 0 degrees if neither is detected
+    else: # Nothing in frame
+        set_servo_angle(0)
 
     cv2.imshow("Face Recognition with MediaPipe", frame)
 
