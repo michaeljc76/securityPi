@@ -1,4 +1,4 @@
-from picamera2 import Picamera2
+# from picamera2 import Picamera2
 import cv2
 import mediapipe as mp
 import face_recognition
@@ -10,9 +10,9 @@ from email.message import EmailMessage
 
 # ========== Email Setup ==========
 def send_email_alert(subject, body):
-    sender_email = "@example.com"
-    sender_password = "########"  # Use App Password if 2FA is enabled
-    receiver_email = "@example.com"
+    sender_email = " kimChaewonLeSera@gmail.com"
+    sender_password = "havQPi5y8rFutrG"  # Use App Password if 2FA is enabled
+    receiver_email = "steven500le@gmail.com"
 
     msg = EmailMessage()
     msg.set_content(body)
