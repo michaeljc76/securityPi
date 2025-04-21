@@ -191,7 +191,7 @@ while True:
 
         buzz()
 
-        send_alert_email(image_path, datetime.now())
+        send_alert(image_path, datetime.now())
         set_servo_angle(0)
     else: # Nothing in frame
         set_servo_angle(0)
@@ -201,11 +201,6 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-    cv2.imshow("Face Recognition with MediaPipe", frame)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
+picam.stop()
 GPIO.cleanup()
 cv2.destroyAllWindows()

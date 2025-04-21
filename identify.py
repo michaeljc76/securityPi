@@ -157,11 +157,6 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-    cv2.imshow("Face Recognition with MediaPipe", frame)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
 cap.release()
 GPIO.cleanup()
 cv2.destroyAllWindows()
