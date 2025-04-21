@@ -17,7 +17,7 @@ servo.start(0)
 
 def open_door():
     print("[INFO] Door opening...")
-    servo.ChangeDutyCycle(7.5)
+    servo.ChangeDutyCycle(7.5)  # adjust based on your servo
     time.sleep(1.5)
     servo.ChangeDutyCycle(2.5)
     time.sleep(0.5)
@@ -37,10 +37,11 @@ video = cv2.VideoCapture(0)
 # ===== GUI Setup =====
 root = tk.Tk()
 root.title("Pi Security Cam")
-root.geometry("360x560")
+root.geometry("360x580")
 root.configure(bg="#1e1e1e")
 root.resizable(False, False)
 
+# ===== Camera Frame in GUI =====
 frame_label = tk.Label(root, bg="#1e1e1e")
 frame_label.pack(pady=10)
 
@@ -71,6 +72,8 @@ def process_frame():
 
     ret, frame = video.read()
     if not ret:
+        print("Failed to grab frame")
+        root.after(10, process_frame)
         return
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -98,10 +101,10 @@ def process_frame():
 
             threading.Thread(target=buffer_check, daemon=True).start()
 
-    # Show frame in GUI
-    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    img = Image.fromarray(img)
-    img = img.resize((320, 240))
+    # Display frame in GUI
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    img = Image.fromarray(rgb)
+    img = img.resize((320, 240))  # Resize for GUI window
     imgtk = ImageTk.PhotoImage(image=img)
     frame_label.imgtk = imgtk
     frame_label.configure(image=imgtk)
@@ -121,6 +124,7 @@ root.after(0, process_frame)
 
 # ===== Safe Exit Cleanup =====
 def cleanup():
+    print("Cleaning up...")
     servo.stop()
     GPIO.cleanup()
     video.release()
