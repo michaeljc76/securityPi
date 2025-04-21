@@ -1,165 +1,130 @@
-from picamera2 import Picamera2
-import cv2
-import face_recognition
-import numpy as np
-import RPi.GPIO as GPIO
-import time
 import tkinter as tk
 from tkinter import messagebox
+import cv2
+import numpy as np
+import threading
+import time
+import RPi.GPIO as GPIO
+from datetime import datetime, timedelta
+from PIL import Image, ImageTk
 
-# SERVO & BUZZER PIN SETUP
+# ===== GPIO Setup =====
 SERVO_PIN = 17
-BUZZER_PIN = 23
-
-# Initialize GPIO
-GPIO.setmode(GPIO.BCM)  # Use Broadcom pin numbering
+GPIO.setmode(GPIO.BCM)
 GPIO.setup(SERVO_PIN, GPIO.OUT)
-GPIO.setup(BUZZER_PIN, GPIO.OUT)
+servo = GPIO.PWM(SERVO_PIN, 50)
+servo.start(0)
 
-# Set up PWM for the servo
-servo_pwm = GPIO.PWM(SERVO_PIN, 50)  # 50Hz PWM frequency
-servo_pwm.start(0)  # Start with 0% duty cycle
+def open_door():
+    print("[INFO] Door opening...")
+    servo.ChangeDutyCycle(7.5)
+    time.sleep(1.5)
+    servo.ChangeDutyCycle(2.5)
+    time.sleep(0.5)
+    servo.ChangeDutyCycle(0)
 
-# Set up PWM for the buzzer
-buzzer_pwm = GPIO.PWM(BUZZER_PIN, 1000)
+# ===== Global States =====
+allow_unknowns = False
+unknown_detected = False
+buffered = False
+last_detection_time = datetime.min
+buffer_duration = 5  # seconds
 
-# Initialize known faces
-known_faces = []
-known_names = []
+# ===== Face Detection =====
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+video = cv2.VideoCapture(0)
 
-# Load known faces (using face_recognition library)
-def load_known_faces():
-    global known_faces, known_names
-
-    # Mike
-    image_mike = face_recognition.load_image_file("mike.png")
-    encodings_mike = face_recognition.face_encodings(image_mike)
-    if encodings_mike:
-        encoding_mike = encodings_mike[0]
-        known_faces.append(encoding_mike)
-        known_names.append("Mike")
-
-    # Steven
-    image_steven = face_recognition.load_image_file("steven.png")
-    encodings_steven = face_recognition.face_encodings(image_steven)
-    if encodings_steven:
-        encoding_steven = encodings_steven[0]
-        known_faces.append(encoding_steven)
-        known_names.append("Steven")
-
-    # Jay
-    image_jay = face_recognition.load_image_file("jay.png")
-    encodings_jay = face_recognition.face_encodings(image_jay)
-    if encodings_jay:
-        encoding_jay = encodings_jay[0]
-        known_faces.append(encoding_jay)
-        known_names.append("Jay")
-
-# Initialize the GUI
+# ===== GUI Setup =====
 root = tk.Tk()
-root.title("Face Recognition")
+root.title("Pi Security Cam")
+root.geometry("360x560")
+root.configure(bg="#1e1e1e")
+root.resizable(False, False)
 
-# Create a label to show the detected name
-label = tk.Label(root, text="No face detected", font=("Arial", 16))
-label.pack(pady=20)
+frame_label = tk.Label(root, bg="#1e1e1e")
+frame_label.pack(pady=10)
 
-# Create a button to exit the program
-exit_button = tk.Button(root, text="Exit", command=root.quit, font=("Arial", 14))
-exit_button.pack(pady=10)
+status_label = tk.Label(root, text="System ready.", font=("Helvetica", 10), bg="#1e1e1e", fg="lightgray")
+status_label.pack(pady=10)
 
-# Function to set the servo angle
-last_angle = None
+def update_status(text):
+    status_label.config(text=f"🔔 {text}")
 
-def set_servo_angle(angle):
-    global last_angle
-    if last_angle == angle:
+def toggle_unknowns():
+    global allow_unknowns
+    allow_unknowns = not allow_unknowns
+    toggle_btn.config(text=f"Allow Unknowns: {'ON' if allow_unknowns else 'OFF'}")
+    update_status("Toggled unknowns permission.")
+
+def manual_open():
+    global unknown_detected, buffered
+    if unknown_detected and buffered:
+        open_door()
+        update_status("Door opened manually.")
+        unknown_detected = False
+        buffered = False
+    else:
+        messagebox.showinfo("Info", "No unknowns in buffer.")
+
+def process_frame():
+    global unknown_detected, buffered, last_detection_time
+
+    ret, frame = video.read()
+    if not ret:
         return
-    last_angle = angle
-    duty_cycle = (angle / 18) + 2
-    servo_pwm.ChangeDutyCycle(duty_cycle)
-    time.sleep(0.5)  # Reduced sleep for snappiness
-    servo_pwm.ChangeDutyCycle(0)  # Stop sending signal
 
-# Function to buzz the buzzer
-def buzz():
-    buzzer_pwm.start(50)
-    print("Buzzing...")
-    time.sleep(1)
-    buzzer_pwm.stop()
-    print("Buzz stopped.")
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, 1.2, 5)
 
-# Set up camera and start capturing
-picam = Picamera2()
+    if len(faces) > 0:
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
-# Lower resolution for faster processing
-preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (320, 240)})
-picam.configure(preview_config)
-picam.start()
+        now = datetime.now()
+        if (now - last_detection_time).total_seconds() > buffer_duration:
+            unknown_detected = True
+            buffered = True
+            last_detection_time = now
+            update_status("Unknown detected. Waiting for response...")
 
-detected_name = None
+            def buffer_check():
+                global unknown_detected, buffered
+                time.sleep(buffer_duration)
+                if allow_unknowns and unknown_detected:
+                    open_door()
+                    update_status("Door auto-opened for unknown.")
+                buffered = False
+                unknown_detected = False
 
-# Load known faces
-load_known_faces()
+            threading.Thread(target=buffer_check, daemon=True).start()
 
-# Function to handle face recognition and update the GUI
-def update_gui():
-    global detected_name
-    frame = picam.capture_array()
+    # Show frame in GUI
+    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    img = Image.fromarray(img)
+    img = img.resize((320, 240))
+    imgtk = ImageTk.PhotoImage(image=img)
+    frame_label.imgtk = imgtk
+    frame_label.configure(image=imgtk)
 
-    # Convert frame to RGB (face_recognition uses RGB, not BGR)
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    root.after(10, process_frame)
 
-    # Find faces in the image
-    face_locations = face_recognition.face_locations(rgb_frame)
+# ===== Buttons =====
+tk.Button(root, text="🔓 Open Door", command=manual_open,
+          font=("Helvetica", 14), bg="#4CAF50", fg="white", width=20, height=2).pack(pady=10)
 
-    if face_locations:
-        for face_location in face_locations:
-            # Get the encoding for the face
-            encoding = face_recognition.face_encodings(rgb_frame, [face_location])
+toggle_btn = tk.Button(root, text="Allow Unknowns: OFF", command=toggle_unknowns,
+                       font=("Helvetica", 12), bg="#FFC107", fg="black", width=20, height=2)
+toggle_btn.pack(pady=10)
 
-            if encoding:
-                matches = face_recognition.compare_faces(known_faces, encoding[0])
-                name = "Unknown"
+# ===== Start Camera Loop =====
+root.after(0, process_frame)
 
-                if True in matches:
-                    match_index = matches.index(True)
-                    name = known_names[match_index]
-                    detected_name = name  # Store the detected name
-                else:
-                    detected_name = None  # No match found
-            else:
-                name = "No Encoding"
+# ===== Safe Exit Cleanup =====
+def cleanup():
+    servo.stop()
+    GPIO.cleanup()
+    video.release()
+    root.destroy()
 
-            # Draw rectangle and name on frame
-            top, right, bottom, left = face_location
-            cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-            cv2.putText(frame, name, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
-    # Update the label with the detected name
-    label.config(text=f"Detected: {detected_name if detected_name else 'No face detected'}")
-
-    # Control servo and buzzer based on detection
-    if detected_name in ["Steven", "Mike"]:
-        set_servo_angle(90)  # Move to 90 degrees if Steven or Mike is detected
-    elif detected_name == "Unknown":
-        buzz()
-        set_servo_angle(0)  # Move back to 0 degrees if neither is detected
-    else:  # Nothing in frame
-        set_servo_angle(0)
-
-    # Show the frame with annotations
-    cv2.imshow("Face Recognition", frame)
-
-    # Continue to update GUI every 100ms
-    root.after(100, update_gui)
-
-# Start updating the GUI
-update_gui()
-
-# Start the main event loop for the GUI
+root.protocol("WM_DELETE_WINDOW", cleanup)
 root.mainloop()
-
-# Cleanup on exit
-picam.stop()
-GPIO.cleanup()
-cv2.destroyAllWindows()
