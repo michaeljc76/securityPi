@@ -1,5 +1,9 @@
-from picamera2 import Picamera2
+import tkinter as tk
+from tkinter import Label, Button, Text, Scrollbar, END
+from PIL import Image, ImageTk
+import threading
 import cv2
+from picamera2 import Picamera2
 import mediapipe as mp
 import face_recognition
 import numpy as np
@@ -15,10 +19,9 @@ BUZZER_PIN = 23
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SERVO_PIN, GPIO.OUT)
 GPIO.setup(BUZZER_PIN, GPIO.OUT)
-
-# --- Servo Setup ---
 servo_pwm = GPIO.PWM(SERVO_PIN, 50)
 servo_pwm.start(0)
+buzzer_pwm = GPIO.PWM(BUZZER_PIN, 1000)
 last_angle = None
 
 def set_servo_angle(angle):
@@ -31,15 +34,10 @@ def set_servo_angle(angle):
     time.sleep(0.5)
     servo_pwm.ChangeDutyCycle(0)
 
-# --- Buzzer Setup ---
-buzzer_pwm = GPIO.PWM(BUZZER_PIN, 1000)
-
 def buzz():
     buzzer_pwm.start(50)
-    print("Buzzing at 1kHz...")
     time.sleep(1)
     buzzer_pwm.stop()
-    print("Stopped buzzing.")
 
 # --- Email Setup ---
 TO_EMAIL = "steven900le@gmail.com"
@@ -48,33 +46,20 @@ ALERT_PASSWORD = "oxwu icfw uogq eesj"
 
 def send_alert(image_path, timestamp):
     msg = EmailMessage()
-    msg['Subject'] = f'⚠️ ALERT: Unknown Person Detected at {timestamp.strftime("%Y-%m-%d %H:%M:%S")}'
+    msg['Subject'] = f'⚠️ ALERT: Unknown Person at {timestamp.strftime("%Y-%m-%d %H:%M:%S")}'
     msg['From'] = ALERT_EMAIL
     msg['To'] = TO_EMAIL
-
-    body = f"""
-ALERT: An unknown person was detected by your security system.
-
-📅 Time of Detection: {timestamp.strftime('%A, %B %d, %Y at %I:%M:%S %p')}
-📍 Camera Device: Pi Security Cam
-
-Please review the attached image for verification.
-    """.strip()
-
-    msg.set_content(body)
+    msg.set_content(f"Unknown person detected at {timestamp.strftime('%c')}. Image attached.")
 
     with open(image_path, 'rb') as img:
-        img_data = img.read()
-        msg.add_attachment(img_data, maintype='image', subtype='jpeg',
-                           filename=f"intruder_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg")
+        msg.add_attachment(img.read(), maintype='image', subtype='jpeg', filename='intruder.jpg')
 
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(ALERT_EMAIL, ALERT_PASSWORD)
             smtp.send_message(msg)
-        print("✅ Email alert sent.")
     except Exception as e:
-        print("❌ Failed to send email:", e)
+        print("Email error:", e)
 
 # --- Load Known Faces ---
 known_faces = []
@@ -86,94 +71,126 @@ def load_face(image_path, name):
     if encodings:
         known_faces.append(encodings[0])
         known_names.append(name)
-    else:
-        print(f"No face found in {name}'s image")
 
 load_face("mike.png", "Mike")
 load_face("steven.png", "Steven")
 load_face("jay.png", "Jay")
 
-# --- MediaPipe Face Detection ---
+# --- MediaPipe Setup ---
 mp_face_detection = mp.solutions.face_detection
-mp_drawing = mp.solutions.drawing_utils
 face_detection = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.6)
 
 # --- Camera Setup ---
 picam = Picamera2()
-preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (1440, 1080)})
+preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (640, 480)})
 picam.configure(preview_config)
 picam.start()
 
-# --- Main Loop ---
-detected_name = None
+# --- GUI Setup ---
+class FaceApp:
+    def __init__(self, window):
+        self.window = window
+        self.window.title("Pi Security System")
+        self.window.geometry("700x600")
 
-try:
-    while True:
-        frame = picam.capture_array()
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = face_detection.process(rgb_frame)
+        self.video_label = Label(window)
+        self.video_label.pack()
 
-        detected_name = None  # Reset every loop
+        self.status = Label(window, text="Initializing...", font=("Helvetica", 14))
+        self.status.pack(pady=10)
 
-        if results.detections:
-            for detection in results.detections:
-                bboxC = detection.location_data.relative_bounding_box
-                ih, iw, _ = frame.shape
-                x1 = int(bboxC.xmin * iw)
-                y1 = int(bboxC.ymin * ih)
-                w = int(bboxC.width * iw)
-                h = int(bboxC.height * ih)
-                x2 = x1 + w
-                y2 = y1 + h
+        self.log_box = Text(window, height=8, width=80)
+        self.log_box.pack()
+        scrollbar = Scrollbar(window, command=self.log_box.yview)
+        self.log_box.config(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-                pad = 20
-                x1 = max(0, x1 - pad)
-                y1 = max(0, y1 - pad)
-                x2 = min(iw, x2 + pad)
-                y2 = min(ih, y2 + pad)
+        self.quit_button = Button(window, text="Quit", command=self.on_close, bg='red', fg='white')
+        self.quit_button.pack(pady=10)
 
-                face_crop = rgb_frame[y1:y2, x1:x2]
-                face_location = [(y1, x2, y2, x1)]
+        self.running = True
+        self.detected_name = None
+        self.thread = threading.Thread(target=self.camera_loop)
+        self.thread.start()
+        self.window.protocol("WM_DELETE_WINDOW", self.on_close)
 
-                try:
-                    encodings = face_recognition.face_encodings(rgb_frame, face_location)
-                    name = "Unknown"
-                    if encodings:
-                        matches = face_recognition.compare_faces(known_faces, encodings[0])
-                        if True in matches:
-                            match_index = matches.index(True)
-                            name = known_names[match_index]
-                            detected_name = name
-                        else:
-                            detected_name = "Unknown"
-                    else:
-                        name = "No Encoding"
-                except Exception as e:
-                    name = f"Error: {e}"
-                    print(e)
+    def log(self, message):
+        self.log_box.insert(END, f"{datetime.now().strftime('%H:%M:%S')} - {message}\n")
+        self.log_box.see(END)
 
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    def update_status(self, name):
+        self.status.config(text=f"Detected: {name}")
 
-        if detected_name in ["Steven", "Mike"]:
-            set_servo_angle(90)
-        elif detected_name == "Unknown":
-            timestamp = datetime.now()
-            image_path = f"unknown_{int(time.time())}.jpg"
-            cv2.imwrite(image_path, frame)
-            buzz()
-            send_alert(image_path, timestamp)
-            set_servo_angle(0)
-        else:
-            set_servo_angle(0)
+    def camera_loop(self):
+        while self.running:
+            frame = picam.capture_array()
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = face_detection.process(rgb)
 
-        cv2.imshow("Face Recognition with MediaPipe", frame)
+            self.detected_name = None
+            if results.detections:
+                for det in results.detections:
+                    bboxC = det.location_data.relative_bounding_box
+                    ih, iw, _ = frame.shape
+                    x1 = int(bboxC.xmin * iw)
+                    y1 = int(bboxC.ymin * ih)
+                    w = int(bboxC.width * iw)
+                    h = int(bboxC.height * ih)
+                    x2, y2 = x1 + w, y1 + h
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+                    pad = 20
+                    x1, y1 = max(0, x1 - pad), max(0, y1 - pad)
+                    x2, y2 = min(iw, x2 + pad), min(ih, y2 + pad)
 
-finally:
-    servo_pwm.stop()
-    buzzer_pwm.stop()
-    GPIO.cleanup()
-    cv2.destroyAllWindows()
+                    face_crop = rgb[y1:y2, x1:x2]
+                    face_location = [(y1, x2, y2, x1)]
+                    try:
+                        encodings = face_recognition.face_encodings(rgb, face_location)
+                        name = "Unknown"
+                        if encodings:
+                            matches = face_recognition.compare_faces(known_faces, encodings[0])
+                            if True in matches:
+                                idx = matches.index(True)
+                                name = known_names[idx]
+                            else:
+                                name = "Unknown"
+                        self.detected_name = name
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    except:
+                        continue
+
+            # GUI updates
+            if self.detected_name in ["Steven", "Mike"]:
+                set_servo_angle(90)
+            elif self.detected_name == "Unknown":
+                set_servo_angle(0)
+                filename = f"unknown_{int(time.time())}.jpg"
+                cv2.imwrite(filename, frame)
+                buzz()
+                send_alert(filename, datetime.now())
+                self.log("⚠️ Unknown person detected!")
+            else:
+                set_servo_angle(0)
+
+            self.update_status(self.detected_name if self.detected_name else "None")
+
+            # Show video in GUI
+            img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            imgtk = ImageTk.PhotoImage(image=img)
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
+
+    def on_close(self):
+        self.running = False
+        self.thread.join()
+        servo_pwm.stop()
+        buzzer_pwm.stop()
+        GPIO.cleanup()
+        self.window.destroy()
+
+# --- Launch GUI ---
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = FaceApp(root)
+    root.mainloop()
