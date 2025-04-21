@@ -1,4 +1,4 @@
-# from picamera2 import Picamera2
+from picamera2 import Picamera2
 import cv2
 import mediapipe as mp
 import face_recognition
