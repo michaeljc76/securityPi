@@ -61,13 +61,10 @@ def run_recognition():
     last_alert_time = datetime.min
     alert_interval = timedelta(seconds=30)  # prevent frequent spam
 
-    # Initialize PiCamera2
-    picam2 = Picamera2()
-    picam2.start()
-
+    cap = cv2.VideoCapture(0)
     while True:
-        frame = picam2.capture_array()
-        if frame is None:
+        ret, frame = cap.read()
+        if not ret:
             break
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -116,7 +113,7 @@ def run_recognition():
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    picam2.stop()
+    cap.release()
     cv2.destroyAllWindows()
 
 # Run the system
