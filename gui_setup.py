@@ -80,7 +80,7 @@ face_detection = mp_face_detection.FaceDetection(model_selection=0, min_detectio
 
 # --- Camera Setup ---
 picam = Picamera2()
-preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (640, 480)})
+preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (320, 240)})
 picam.configure(preview_config)
 picam.start()
 
