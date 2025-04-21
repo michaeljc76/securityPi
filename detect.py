@@ -5,6 +5,9 @@ import face_recognition
 import numpy as np
 import RPi.GPIO as GPIO
 import time
+import smtplib
+from email.message import EmailMessage
+from datetime import datetime
 
 SERVO_PIN = 17
 BUZZER_PIN = 23
@@ -39,7 +42,6 @@ else:
     print("No face found in Steven's image")
 
 # Jay
-# Steven
 image_jay = face_recognition.load_image_file("jay.png")
 encodings_jay = face_recognition.face_encodings(image_jay)
 if encodings_jay:  # Check if face encoding is found
@@ -90,6 +92,42 @@ picam.start()
 
 detected_name = None  # Variable to store the name of the detected person
 
+# EMAIL SETUP
+TO_EMAIL = "steven900le@gmail.com"
+ALERT_EMAIL = "steven500le@gmail.com"
+ALERT_PASSWORD = "oxwu icfw uogq eesj"
+
+def send_alert(image_path, timestamp):
+    msg = EmailMessage()
+    msg['Subject'] = f'⚠️ ALERT: Unknown Person Detected at {timestamp.strftime("%Y-%m-%d %H:%M:%S")}'
+    msg['From'] = ALERT_EMAIL
+    msg['To'] = TO_EMAIL
+
+    body = f"""
+ALERT: An unknown person was detected by your security system.
+
+📅 Time of Detection: {timestamp.strftime('%A, %B %d, %Y at %I:%M:%S %p')}
+📍 Camera Device: Pi Security Cam
+
+Please review the attached image for verification.
+    """.strip()
+
+    msg.set_content(body)
+
+    with open(image_path, 'rb') as img:
+        img_data = img.read()
+        msg.add_attachment(img_data, maintype='image', subtype='jpeg',
+                           filename=f"intruder_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg")
+
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+            smtp.login(ALERT_EMAIL, ALERT_PASSWORD)
+            smtp.send_message(msg)
+        print("✅ Email alert sent.")
+    except Exception as e:
+        print("❌ Failed to send email:", e)
+
+# SETUP END, MAIN LOOP
 while True:
     frame = picam.capture_array()
 
@@ -147,8 +185,14 @@ while True:
     if detected_name in ["Steven", "Mike"]:
         set_servo_angle(90)  # Move to 90 degrees if Steven or Mike is detected
     elif detected_name == "Unknown":
+        timestamp = int(time.time())
+        image_path = f"unknown_{timestamp}.jpg"
+        cv2.imwrite(image_path, frame)
+
         buzz()
-        set_servo_angle(0)  # Move back to 0 degrees if neither is detected
+
+        send_alert_email(image_path, datetime.now())
+        set_servo_angle(0)
     else: # Nothing in frame
         set_servo_angle(0)
 
