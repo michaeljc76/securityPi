@@ -40,7 +40,7 @@ def buzz():
     buzzer_pwm.stop()
 
 # --- Email Setup ---
-TO_EMAIL = "kimchaewonlesera@gmail.com"
+TO_EMAIL = "steven900le@gmail.com"
 ALERT_EMAIL = "steven500le@gmail.com"
 ALERT_PASSWORD = "oxwu icfw uogq eesj"
 
