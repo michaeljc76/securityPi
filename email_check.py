@@ -61,11 +61,15 @@ def run_recognition():
     last_alert_time = datetime.min
     alert_interval = timedelta(seconds=30)  # prevent frequent spam
 
-    cap = cv2.VideoCapture(0)
+    # PiCamera Setup
+    picam = Picamera2()
+    preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (640, 480)})
+    picam.configure(preview_config)
+    picam.start()
+
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+        # Capture frame from PiCamera
+        frame = picam.capture_array()
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = face_detection.process(rgb_frame)
@@ -113,7 +117,7 @@ def run_recognition():
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    cap.release()
+    picam.stop()
     cv2.destroyAllWindows()
 
 # Run the system
