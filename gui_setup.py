@@ -104,9 +104,22 @@ class FaceApp:
         self.status = Label(window, text="Initializing...", font=("Helvetica", 16, "bold"), fg="#00ffcc", bg="#1e1e2f")
         self.status.pack(pady=10)
 
-        self.open_button = Button(window, text="Open Door", command=self.open_door, font=("Helvetica", 14),
-                                  bg="#00cc66", fg="white", activebackground="#00aa55", relief="raised")
-        self.open_button.pack(pady=10)
+        # Control buttons frame
+        control_frame = tk.Frame(window, bg="#1e1e2f")
+        control_frame.pack(pady=5)
+
+        self.open_button = Button(control_frame, text="Open Door", command=self.open_door, font=("Helvetica", 14),
+                                bg="#00cc66", fg="white", activebackground="#00aa55", relief="raised")
+        self.open_button.pack(side=tk.LEFT, padx=10)
+
+        # Camera toggle button
+        self.camera_active = True
+        self.toggle_text = tk.StringVar()
+        self.toggle_text.set("Camera: ON")
+        self.toggle_button = Button(control_frame, textvariable=self.toggle_text, command=self.toggle_camera,
+                                  font=("Helvetica", 14), bg="#3498db", fg="white", activebackground="#2980b9", 
+                                  relief="raised", width=12)
+        self.toggle_button.pack(side=tk.LEFT, padx=10)
 
         self.log_box = Text(window, height=8, width=80, bg="#f0f0f0", fg="black")
         self.log_box.pack(pady=(10, 0))
@@ -121,6 +134,11 @@ class FaceApp:
         self.detected_name = None
         self.unknown_detected = False
         self.last_alert_time = 0
+        
+        # Create a placeholder image for when camera is off
+        self.placeholder = np.ones((190, 280, 3), dtype=np.uint8) * 100  # Gray placeholder
+        cv2.putText(self.placeholder, "Camera Off", (70, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+        
         self.thread = threading.Thread(target=self.camera_loop)
         self.thread.start()
 
@@ -136,9 +154,30 @@ class FaceApp:
     def open_door(self):
         set_servo_angle(90)
         self.log("✅ Door manually opened.")
+    
+    def toggle_camera(self):
+        self.camera_active = not self.camera_active
+        if self.camera_active:
+            self.toggle_text.set("Camera: ON")
+            self.toggle_button.config(bg="#3498db")
+            self.log("📷 Camera activated")
+        else:
+            self.toggle_text.set("Camera: OFF")
+            self.toggle_button.config(bg="#95a5a6")  # Gray color when off
+            self.update_status("Camera Off")
+            self.log("📷 Camera deactivated")
+            # Display placeholder image
+            img = Image.fromarray(cv2.cvtColor(self.placeholder, cv2.COLOR_BGR2RGB))
+            imgtk = ImageTk.PhotoImage(image=img)
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
 
     def camera_loop(self):
         while self.running:
+            if not self.camera_active:
+                time.sleep(0.1)  # Reduce CPU usage when camera is off
+                continue
+                
             frame = picam.capture_array()
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = face_detection.process(rgb)
