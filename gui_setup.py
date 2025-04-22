@@ -12,6 +12,7 @@ import time
 import smtplib
 from email.message import EmailMessage
 from datetime import datetime
+import os
 
 # --- GPIO Setup ---
 SERVO_PIN = 17
@@ -44,13 +45,15 @@ TO_EMAIL = "steven900le@gmail.com"
 ALERT_EMAIL = "steven500le@gmail.com"
 ALERT_PASSWORD = "oxwu icfw uogq eesj"
 
-def send_alert(image_path, timestamp):
+def send_alert(image_np, timestamp):
+    filename = "intruder.jpg"
+    cv2.imwrite(filename, image_np)
     msg = EmailMessage()
     msg['Subject'] = f'⚠️ ALERT: Unknown Person at {timestamp.strftime("%Y-%m-%d %H:%M:%S")}'
     msg['From'] = ALERT_EMAIL
     msg['To'] = TO_EMAIL
     msg.set_content(f"Unknown person detected at {timestamp.strftime('%c')}. Image attached.")
-    with open(image_path, 'rb') as img:
+    with open(filename, 'rb') as img:
         msg.add_attachment(img.read(), maintype='image', subtype='jpeg', filename='intruder.jpg')
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
@@ -58,6 +61,9 @@ def send_alert(image_path, timestamp):
             smtp.send_message(msg)
     except Exception as e:
         print("Email error:", e)
+    finally:
+        if os.path.exists(filename):
+            os.remove(filename)
 
 # --- Load Known Faces ---
 known_faces = []
@@ -80,7 +86,7 @@ face_detection = mp_face_detection.FaceDetection(model_selection=0, min_detectio
 
 # --- Camera Setup ---
 picam = Picamera2()
-preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (320, 240)})
+preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (280, 190)})
 picam.configure(preview_config)
 picam.start()
 
@@ -114,7 +120,6 @@ class FaceApp:
         self.running = True
         self.detected_name = None
         self.unknown_detected = False
-        self.alert_timer = 0
         self.last_alert_time = 0
         self.thread = threading.Thread(target=self.camera_loop)
         self.thread.start()
@@ -167,17 +172,14 @@ class FaceApp:
                     except:
                         continue
 
-            # --- Behavior ---
             current_time = time.time()
             if self.detected_name in ["Steven", "Mike"]:
                 set_servo_angle(90)
                 self.unknown_detected = False
             elif self.detected_name == "Unknown":
-                if not self.unknown_detected or (current_time - self.last_alert_time > 15):  # Buffer
-                    filename = f"unknown_{int(current_time)}.jpg"
-                    cv2.imwrite(filename, frame)
+                if not self.unknown_detected or (current_time - self.last_alert_time > 15):
                     buzz()
-                    send_alert(filename, datetime.now())
+                    send_alert(frame, datetime.now())
                     self.log("⚠️ Unknown person detected! Awaiting manual action...")
                     self.last_alert_time = current_time
                     self.unknown_detected = True
@@ -187,7 +189,6 @@ class FaceApp:
 
             self.update_status(self.detected_name if self.detected_name else "None")
 
-            # Show video in GUI
             img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             imgtk = ImageTk.PhotoImage(image=img)
             self.video_label.imgtk = imgtk
