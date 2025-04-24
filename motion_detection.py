@@ -22,8 +22,8 @@ last_state_change = time.time()
 pir_cooldown = 5  # seconds
 motion_timeout = 30  # Force reset motion status if stuck for this many seconds
 
-print("PIR sensor calibrating - please wait 60 seconds...")
-time.sleep(60)  # Extended calibration time
+print("PIR sensor calibrating - please wait 10 seconds...")
+time.sleep(10)  # Reduced calibration time from 60 to 10 seconds
 print("PIR sensor ready")
 
 try:
@@ -35,7 +35,7 @@ try:
         current_time = time.time()
         
         # Print the raw sensor value every 5 seconds for debugging
-        if current_time % 5 < 0.1:
+        if int(current_time) % 5 == 0 and current_time % 1 < 0.1:
             print(f"Current PIR value: {current_state}")
         
         # Force reset if motion has been active too long
@@ -46,13 +46,12 @@ try:
         
         # Process motion detection
         if current_state == 1:  # Motion detected (HIGH)
-            last_motion_time = current_time
-            
             if not motion_active:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"[{timestamp}] MOTION DETECTED!")
                 motion_active = True
                 last_state_change = current_time
+                last_motion_time = current_time  # Only update when motion starts
                 
             # Start camera if not already active
             if not camera_active:
@@ -66,8 +65,12 @@ try:
                 motion_active = False
                 last_state_change = current_time
         
-        # Camera control logic
-        if not current_state and camera_active and (current_time - last_motion_time) > pir_cooldown:
+        # Camera control logic - Add debug info
+        if camera_active and not current_state:
+            print(f"Time since last motion: {current_time - last_motion_time:.1f}s (need {pir_cooldown}s)")
+
+        # Only stop camera if no motion AND cooldown period passed
+        if camera_active and not current_state and (current_time - last_motion_time) > pir_cooldown:
             print("No motion for", pir_cooldown, "seconds. Stopping camera...")
             picam.stop()
             camera_active = False
