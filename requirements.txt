@@ -2,6 +2,7 @@ mediapipe
 opencv-python
 face_recognition
 numpy
+tkinter
 
 # NOTE: picamera2 must be installed via apt
 # sudo apt install python3-picamera2

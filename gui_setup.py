@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 from tkinter import Label, Button, Text, Scrollbar, END
 from PIL import Image, ImageTk
 import threading
@@ -86,7 +87,7 @@ face_detection = mp_face_detection.FaceDetection(model_selection=0, min_detectio
 
 # --- Camera Setup ---
 picam = Picamera2()
-preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (280, 190)})
+preview_config = picam.create_preview_configuration(main={"format": "RGB888", "size": (320, 240)})
 picam.configure(preview_config)
 picam.start()
 
@@ -104,21 +105,30 @@ class FaceApp:
         self.status = Label(window, text="Initializing...", font=("Helvetica", 16, "bold"), fg="#00ffcc", bg="#1e1e2f")
         self.status.pack(pady=10)
 
+        # Button styling
+        style = ttk.Style()
+        style.configure("Rounded.TButton",
+                        font=("Helvetica", 14),
+                        padding=10,
+                        relief="flat",
+                        background="#00cc66",
+                        foreground="white")
+        style.map("Rounded.TButton",
+                    background=[("active", "#00aa55")])
+
+
         # Control buttons frame
         control_frame = tk.Frame(window, bg="#1e1e2f")
         control_frame.pack(pady=5)
 
-        self.open_button = Button(control_frame, text="Open Door", command=self.open_door, font=("Helvetica", 14),
-                                bg="#00cc66", fg="white", activebackground="#00aa55", relief="raised")
+        self.open_button = Button(control_frame, text="Open Door", command=self.open_door, style="Rounded.TButton")
         self.open_button.pack(side=tk.LEFT, padx=10)
 
-        # Camera toggle button
+        # Camera toggle z
         self.camera_active = True
         self.toggle_text = tk.StringVar()
         self.toggle_text.set("Camera: ON")
-        self.toggle_button = Button(control_frame, textvariable=self.toggle_text, command=self.toggle_camera,
-                                  font=("Helvetica", 14), bg="#3498db", fg="white", activebackground="#2980b9", 
-                                  relief="raised", width=12)
+        self.toggle_button = Button(control_frame, textvariable=self.toggle_text, command=self.toggle_camera, style="Rounded.TButton")
         self.toggle_button.pack(side=tk.LEFT, padx=10)
 
         self.log_box = Text(window, height=8, width=80, bg="#f0f0f0", fg="black")
@@ -127,7 +137,7 @@ class FaceApp:
         self.log_box.config(yscrollcommand=scrollbar.set)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        self.quit_button = Button(window, text="Quit", command=self.on_close, bg='red', fg='white')
+        self.quit_button = Button(window, text="Quit", command=self.on_close, style="Rounded.TButton")
         self.quit_button.pack(pady=10)
 
         self.running = True
@@ -136,7 +146,7 @@ class FaceApp:
         self.last_alert_time = 0
         
         # Create a placeholder image for when camera is off
-        self.placeholder = np.ones((190, 280, 3), dtype=np.uint8) * 100  # Gray placeholder
+        self.placeholder = np.ones((240, 320, 3), dtype=np.uint8) * 100  # Gray placeholder
         cv2.putText(self.placeholder, "Camera Off", (70, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
         
         self.thread = threading.Thread(target=self.camera_loop)
