@@ -121,14 +121,14 @@ class FaceApp:
         control_frame = tk.Frame(window, bg="#1e1e2f")
         control_frame.pack(pady=5)
 
-        self.open_button = Button(control_frame, text="Open Door", command=self.open_door, style="Rounded.TButton")
+        self.open_button = ttk.Button(control_frame, text="Open Door", command=self.open_door, style="Rounded.TButton")
         self.open_button.pack(side=tk.LEFT, padx=10)
 
         # Camera toggle z
         self.camera_active = True
         self.toggle_text = tk.StringVar()
         self.toggle_text.set("Camera: ON")
-        self.toggle_button = Button(control_frame, textvariable=self.toggle_text, command=self.toggle_camera, style="Rounded.TButton")
+        self.toggle_button = ttk.Button(control_frame, textvariable=self.toggle_text, command=self.toggle_camera, style="Rounded.TButton")
         self.toggle_button.pack(side=tk.LEFT, padx=10)
 
         self.log_box = Text(window, height=8, width=80, bg="#f0f0f0", fg="black")
@@ -137,7 +137,7 @@ class FaceApp:
         self.log_box.config(yscrollcommand=scrollbar.set)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        self.quit_button = Button(window, text="Quit", command=self.on_close, style="Rounded.TButton")
+        self.quit_button = ttk.Button(window, text="Quit", command=self.on_close, style="Rounded.TButton")
         self.quit_button.pack(pady=10)
 
         self.running = True
