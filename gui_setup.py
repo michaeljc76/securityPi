@@ -43,7 +43,7 @@ def buzz():
 # --- Email Setup ---
 TO_EMAIL = "steven900le@gmail.com"
 ALERT_EMAIL = "steven500le@gmail.com"
-ALERT_PASSWORD = "oxwu icfw uogq eesj"
+ALERT_PASSWORD = "srid lnij uqbf tnao"
 
 def send_alert(image_np, timestamp):
     filename = "intruder.jpg"
