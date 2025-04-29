@@ -19,9 +19,11 @@ import queue
 # --- GPIO Setup ---
 SERVO_PIN = 17
 BUZZER_PIN = 23
+PIR_PIN = 4
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SERVO_PIN, GPIO.OUT)
 GPIO.setup(BUZZER_PIN, GPIO.OUT)
+GPIO.setup(PIR_PIN, GPIO.IN)
 servo_pwm = GPIO.PWM(SERVO_PIN, 50)
 servo_pwm.start(0)
 buzzer_pwm = GPIO.PWM(BUZZER_PIN, 1000)
@@ -186,49 +188,54 @@ class FaceApp:
             self.video_label.configure(image=imgtk)
 
     def camera_loop(self):
+        last_motion_time = 0
+        motion_cooldown = 5
         while self.running:
             if not self.camera_active:
                 time.sleep(0.1)
                 continue
 
-            frame = picam.capture_array()
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = face_detection.process(rgb)
+            # Check PIR sensor
+            current_time = time.time()
+            if GPIO.input(PIR_PIN) == GPIO.HIGH and (current_time - last_motion_time) > motion_cooldown:
+                last_motion_time = current_time
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = face_detection.process(rgb)
 
-            self.detected_name = None
-            if results.detections:
-                for det in results.detections:
-                    bboxC = det.location_data.relative_bounding_box
-                    ih, iw, _ = frame.shape
-                    x1 = int(bboxC.xmin * iw)
-                    y1 = int(bboxC.ymin * ih)
-                    w = int(bboxC.width * iw)
-                    h = int(bboxC.height * ih)
-                    x2, y2 = x1 + w, y1 + h
-                    pad = 20
-                    x1, y1 = max(0, x1 - pad), max(0, y1 - pad)
-                    x2, y2 = min(iw, x2 + pad), min(ih, y2 + pad)
-                    face_crop = rgb[y1:y2, x1:x2]
-                    face_location = [(y1, x2, y2, x1)]
-                    try:
-                        encodings = face_recognition.face_encodings(rgb, face_location)
-                        name = "Unknown"
-                        if encodings:
-                            matches = face_recognition.compare_faces(known_faces, encodings[0])
-                            if True in matches:
-                                idx = matches.index(True)
-                                name = known_names[idx]
-                        self.detected_name = name
-                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                        cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                    except:
-                        continue
+                self.detected_name = None
+                if results.detections:
+                    for det in results.detections:
+                        bboxC = det.location_data.relative_bounding_box
+                        ih, iw, _ = frame.shape
+                        x1 = int(bboxC.xmin * iw)
+                        y1 = int(bboxC.ymin * ih)
+                        w = int(bboxC.width * iw)
+                        h = int(bboxC.height * ih)
+                        x2, y2 = x1 + w, y1 + h
+                        pad = 20
+                        x1, y1 = max(0, x1 - pad), max(0, y1 - pad)
+                        x2, y2 = min(iw, x2 + pad), min(ih, y2 + pad)
+                        face_crop = rgb[y1:y2, x1:x2]
+                        face_location = [(y1, x2, y2, x1)]
+                        try:
+                            encodings = face_recognition.face_encodings(rgb, face_location)
+                            name = "Unknown"
+                            if encodings:
+                                matches = face_recognition.compare_faces(known_faces, encodings[0])
+                                if True in matches:
+                                    idx = matches.index(True)
+                                    name = known_names[idx]
+                            self.detected_name = name
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                            cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                        except:
+                            continue
 
-            # Send processed frame to the GUI
-            if not self.frame_queue.full():
-                self.frame_queue.put(frame)
-            
-            time.sleep(0.05)
+                # Send processed frame to the GUI
+                if not self.frame_queue.full():
+                    self.frame_queue.put(frame)
+                
+            time.sleep(0.05)  # Small delay to avoid overloading CPU
 
     def update_gui(self):
         try:
