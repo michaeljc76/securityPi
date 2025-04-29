@@ -252,7 +252,7 @@ class FaceApp:
             if self.detected_name in ["Steven", "Mike"]:
                 set_servo_angle(90)
                 self.unknown_detected = False
-            elif self.detected_name in ["Unknown", "None"]:
+            elif self.detected_name == "Unknown" or not self.detected_name:
                 if not self.unknown_detected or (current_time - self.last_alert_time > 15):
                     buzz()
                     send_alert(frame, datetime.now())
