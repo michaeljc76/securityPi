@@ -24,6 +24,7 @@ GPIO.setup(BUZZER_PIN, GPIO.OUT)
 servo_pwm = GPIO.PWM(SERVO_PIN, 50)
 servo_pwm.start(0)
 buzzer_pwm = GPIO.PWM(BUZZER_PIN, 1000)
+buzzer_pwm.start(0)
 last_angle = None
 
 def set_servo_angle(angle):
@@ -112,7 +113,8 @@ class FaceApp:
                         relief="flat",
                         background="#00cc66",
                         foreground="white")
-        style.map("Rounded.TButton", background=[("active", "#00aa55")])
+        style.map("Rounded.TButton",
+                  background=[("active", "#00aa55")])
 
         control_frame = tk.Frame(window, bg="#1e1e2f")
         control_frame.pack(pady=5)
@@ -120,6 +122,7 @@ class FaceApp:
         self.open_button = ttk.Button(control_frame, text="Open Door", command=self.open_door, style="Rounded.TButton")
         self.open_button.pack(side=tk.LEFT, padx=10)
 
+        self.camera_active = True
         self.toggle_text = tk.StringVar()
         self.toggle_text.set("Camera: ON")
         self.toggle_button = ttk.Button(control_frame, textvariable=self.toggle_text, command=self.toggle_camera, style="Rounded.TButton")
@@ -138,13 +141,12 @@ class FaceApp:
         self.detected_name = None
         self.unknown_detected = False
         self.last_alert_time = 0
-        self.camera_active = True
-        self.frame_counter = 0
 
         self.placeholder = np.ones((240, 320, 3), dtype=np.uint8) * 100
         cv2.putText(self.placeholder, "Camera Off", (70, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
 
-        self.update_frame()
+        self.thread = threading.Thread(target=self.camera_loop)
+        self.thread.start()
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -173,81 +175,79 @@ class FaceApp:
             self.video_label.imgtk = imgtk
             self.video_label.configure(image=imgtk)
 
-    def update_frame(self):
-        if not self.running:
-            return
+    def camera_loop(self):
+        while self.running:
+            if not self.camera_active:
+                time.sleep(0.1)
+                continue
 
-        if self.camera_active:
             frame = picam.capture_array()
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = face_detection.process(rgb)
 
-            # Resize for faster display
-            small_frame = cv2.resize(frame, (320, 240))
+            self.detected_name = None
+            if results.detections:
+                for det in results.detections:
+                    bboxC = det.location_data.relative_bounding_box
+                    ih, iw, _ = frame.shape
+                    x1 = int(bboxC.xmin * iw)
+                    y1 = int(bboxC.ymin * ih)
+                    w = int(bboxC.width * iw)
+                    h = int(bboxC.height * ih)
+                    x2, y2 = x1 + w, y1 + h
+                    pad = 20
+                    x1, y1 = max(0, x1 - pad), max(0, y1 - pad)
+                    x2, y2 = min(iw, x2 + pad), min(ih, y2 + pad)
+                    face_crop = rgb[y1:y2, x1:x2]
+                    face_location = [(y1, x2, y2, x1)]
+                    try:
+                        encodings = face_recognition.face_encodings(rgb, face_location)
+                        name = "Unknown"
+                        if encodings:
+                            matches = face_recognition.compare_faces(known_faces, encodings[0])
+                            if True in matches:
+                                idx = matches.index(True)
+                                name = known_names[idx]
+                        self.detected_name = name
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        cv2.putText(frame, name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    except:
+                        continue
 
-            rgb_small = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+            current_time = time.time()
+            if self.detected_name in ["Steven", "Mike"]:
+                set_servo_angle(90)
+                self.unknown_detected = False
+            elif self.detected_name == "Unknown":
+                if not self.unknown_detected or (current_time - self.last_alert_time > 15):
+                    buzz()
+                    send_alert(frame, datetime.now())
+                    self.log("⚠️ Unknown person detected! Awaiting manual action...")
+                    self.last_alert_time = current_time
+                    self.unknown_detected = True
+                set_servo_angle(0)
+            else:
+                set_servo_angle(0)
 
-            if self.frame_counter % 5 == 0:  # Only run detection every 5 frames
-                results = face_detection.process(rgb_small)
-                self.detected_name = None
+            name_display = self.detected_name if self.detected_name else "No Face Detected"
+            self.update_status(name_display)
 
-                if results.detections:
-                    for det in results.detections:
-                        bboxC = det.location_data.relative_bounding_box
-                        ih, iw, _ = small_frame.shape
-                        x1 = int(bboxC.xmin * iw)
-                        y1 = int(bboxC.ymin * ih)
-                        w = int(bboxC.width * iw)
-                        h = int(bboxC.height * ih)
-                        x2, y2 = x1 + w, y1 + h
-                        pad = 20
-                        x1, y1 = max(0, x1 - pad), max(0, y1 - pad)
-                        x2, y2 = min(iw, x2 + pad), min(ih, y2 + pad)
-                        face_crop = rgb_small[y1:y2, x1:x2]
-                        face_location = [(y1, x2, y2, x1)]
-                        try:
-                            encodings = face_recognition.face_encodings(rgb_small, face_location)
-                            name = "Unknown"
-                            if encodings:
-                                matches = face_recognition.compare_faces(known_faces, encodings[0])
-                                if True in matches:
-                                    idx = matches.index(True)
-                                    name = known_names[idx]
-                            self.detected_name = name
-                        except:
-                            continue
-
-                current_time = time.time()
-                if self.detected_name in ["Steven", "Mike"]:
-                    set_servo_angle(90)
-                    self.unknown_detected = False
-                elif self.detected_name == "Unknown":
-                    if not self.unknown_detected or (current_time - self.last_alert_time > 30):
-                        buzz()
-                        send_alert(frame, datetime.now())
-                        self.log("🚨 Unknown detected!")
-                        self.last_alert_time = current_time
-                        self.unknown_detected = True
-
-                if self.detected_name:
-                    self.update_status(self.detected_name)
-
-            img = Image.fromarray(rgb_small)
+            img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             imgtk = ImageTk.PhotoImage(image=img)
             self.video_label.imgtk = imgtk
             self.video_label.configure(image=imgtk)
 
-            self.frame_counter += 1
-
-        self.window.after(66, self.update_frame)  # Roughly 15 FPS
+            time.sleep(0.05)
 
     def on_close(self):
         self.running = False
+        time.sleep(0.5)
+        picam.stop()
         servo_pwm.stop()
         buzzer_pwm.stop()
         GPIO.cleanup()
-        picam.close()
         self.window.destroy()
 
-# --- Main Program ---
 root = tk.Tk()
 app = FaceApp(root)
 root.mainloop()
