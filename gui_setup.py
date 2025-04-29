@@ -14,6 +14,7 @@ import smtplib
 from email.message import EmailMessage
 from datetime import datetime
 import os
+import queue
 
 # --- GPIO Setup ---
 SERVO_PIN = 17
@@ -150,7 +151,9 @@ class FaceApp:
         self.placeholder = np.ones((240, 320, 3), dtype=np.uint8) * 100
         cv2.putText(self.placeholder, "Camera Off", (70, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
 
+        self.frame_queue = queue.Queue(maxsize=10)  # Buffer frames to reduce GUI load
         self.thread = threading.Thread(target=self.camera_loop)
+        self.thread.daemon = True
         self.thread.start()
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -241,7 +244,8 @@ class FaceApp:
             imgtk = ImageTk.PhotoImage(image=img)
             self.video_label.imgtk = imgtk
             self.video_label.configure(image=imgtk)
-            time.sleep(0.1)
+        except queue.Empty:
+            pass
 
     def on_close(self):
         self.running = False
@@ -251,4 +255,11 @@ class FaceApp:
 # --- Main ---
 window = tk.Tk()
 app = FaceApp(window)
+
+# Update the GUI periodically
+def gui_update():
+    app.update_gui()
+    window.after(50, gui_update)
+
+window.after(50, gui_update)  # Start GUI updates
 window.mainloop()
