@@ -122,6 +122,9 @@ class FaceApp:
         self.open_button = ttk.Button(control_frame, text="Open Door", command=self.open_door, style="Rounded.TButton")
         self.open_button.pack(side=tk.LEFT, padx=10)
 
+        self.close_button = ttk.Button(control_frame, text="Close Door", command=self.close_door, style="Rounded.TButton")
+        self.close_button.pack(side=tk.LEFT, padx=10)
+
         self.camera_active = True
         self.toggle_text = tk.StringVar()
         self.toggle_text.set("Camera: ON")
@@ -160,6 +163,10 @@ class FaceApp:
     def open_door(self):
         set_servo_angle(90)
         self.log("✅ Door manually opened.")
+
+    def close_door(self):
+        set_servo_angle(0)
+        self.log("🚪 Door manually closed.")
 
     def toggle_camera(self):
         self.camera_active = not self.camera_active
@@ -226,28 +233,19 @@ class FaceApp:
                     self.last_alert_time = current_time
                     self.unknown_detected = True
                 set_servo_angle(0)
-            else:
-                set_servo_angle(0)
-
-            name_display = self.detected_name if self.detected_name else "No Face Detected"
-            self.update_status(name_display)
-
+            self.update_status(self.detected_name)
             img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             imgtk = ImageTk.PhotoImage(image=img)
             self.video_label.imgtk = imgtk
             self.video_label.configure(image=imgtk)
-
-            time.sleep(0.05)
+            time.sleep(0.1)
 
     def on_close(self):
         self.running = False
-        time.sleep(0.5)
-        picam.stop()
-        servo_pwm.stop()
-        buzzer_pwm.stop()
         GPIO.cleanup()
-        self.window.destroy()
+        self.window.quit()
 
-root = tk.Tk()
-app = FaceApp(root)
-root.mainloop()
+# --- Main ---
+window = tk.Tk()
+app = FaceApp(window)
+window.mainloop()
