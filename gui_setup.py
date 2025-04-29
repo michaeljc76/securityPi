@@ -14,7 +14,6 @@ import smtplib
 from email.message import EmailMessage
 from datetime import datetime
 import os
-import queue
 
 # --- GPIO Setup ---
 SERVO_PIN = 17
@@ -27,7 +26,6 @@ GPIO.setup(PIR_PIN, GPIO.IN)
 servo_pwm = GPIO.PWM(SERVO_PIN, 50)
 servo_pwm.start(0)
 buzzer_pwm = GPIO.PWM(BUZZER_PIN, 1000)
-buzzer_pwm.start(0)
 last_angle = None
 
 def set_servo_angle(angle):
@@ -109,6 +107,7 @@ class FaceApp:
         self.status = Label(window, text="Initializing...", font=("Helvetica", 16, "bold"), fg="#00ffcc", bg="#1e1e2f")
         self.status.pack(pady=10)
 
+        # Button styling
         style = ttk.Style()
         style.configure("Rounded.TButton",
                         font=("Helvetica", 14),
@@ -117,17 +116,17 @@ class FaceApp:
                         background="#00cc66",
                         foreground="white")
         style.map("Rounded.TButton",
-                  background=[("active", "#00aa55")])
+                    background=[("active", "#00aa55")])
 
+
+        # Control buttons frame
         control_frame = tk.Frame(window, bg="#1e1e2f")
         control_frame.pack(pady=5)
 
         self.open_button = ttk.Button(control_frame, text="Open Door", command=self.open_door, style="Rounded.TButton")
         self.open_button.pack(side=tk.LEFT, padx=10)
 
-        self.close_button = ttk.Button(control_frame, text="Close Door", command=self.close_door, style="Rounded.TButton")
-        self.close_button.pack(side=tk.LEFT, padx=10)
-
+        # Camera toggle z
         self.camera_active = True
         self.toggle_text = tk.StringVar()
         self.toggle_text.set("Camera: ON")
@@ -147,13 +146,12 @@ class FaceApp:
         self.detected_name = None
         self.unknown_detected = False
         self.last_alert_time = 0
-
-        self.placeholder = np.ones((240, 320, 3), dtype=np.uint8) * 100
+        
+        # Create a placeholder image for when camera is off
+        self.placeholder = np.ones((240, 320, 3), dtype=np.uint8) * 100  # Gray placeholder
         cv2.putText(self.placeholder, "Camera Off", (70, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-
-        self.frame_queue = queue.Queue(maxsize=10)  # Buffer frames to reduce GUI load
+        
         self.thread = threading.Thread(target=self.camera_loop)
-        self.thread.daemon = True
         self.thread.start()
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -168,37 +166,33 @@ class FaceApp:
     def open_door(self):
         set_servo_angle(90)
         self.log("✅ Door manually opened.")
-
-    def close_door(self):
-        set_servo_angle(0)
-        self.log("🚪 Door manually closed.")
-
+    
     def toggle_camera(self):
         self.camera_active = not self.camera_active
         if self.camera_active:
             self.toggle_text.set("Camera: ON")
+            self.toggle_button.config(bg="#3498db")
             self.log("📷 Camera activated")
         else:
             self.toggle_text.set("Camera: OFF")
+            self.toggle_button.config(bg="#95a5a6")  # Gray color when off
             self.update_status("Camera Off")
             self.log("📷 Camera deactivated")
+            # Display placeholder image
             img = Image.fromarray(cv2.cvtColor(self.placeholder, cv2.COLOR_BGR2RGB))
             imgtk = ImageTk.PhotoImage(image=img)
             self.video_label.imgtk = imgtk
             self.video_label.configure(image=imgtk)
 
     def camera_loop(self):
-        last_motion_time = 0
-        motion_cooldown = 5
         while self.running:
             if not self.camera_active:
                 time.sleep(0.1)
                 continue
 
-            # Check PIR sensor
-            current_time = time.time()
-            if GPIO.input(PIR_PIN) == GPIO.HIGH and (current_time - last_motion_time) > motion_cooldown:
-                last_motion_time = current_time
+            # Only proceed if motion is detected
+            if GPIO.input(PIR_PIN) == GPIO.HIGH:  # Motion detected
+                frame = picam.capture_array()
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = face_detection.process(rgb)
 
@@ -231,35 +225,40 @@ class FaceApp:
                         except:
                             continue
 
-                # Send processed frame to the GUI
-                if not self.frame_queue.full():
-                    self.frame_queue.put(frame)
-                
-            time.sleep(0.05)  # Small delay to avoid overloading CPU
+                current_time = time.time()
+                if self.detected_name in ["Steven", "Mike"]:
+                    set_servo_angle(90)
+                    self.unknown_detected = False
+                elif self.detected_name == "Unknown":
+                    if not self.unknown_detected or (current_time - self.last_alert_time > 15):
+                        buzz()
+                        send_alert(frame, datetime.now())
+                        self.log("⚠️ Unknown person detected! Awaiting manual action...")
+                        self.last_alert_time = current_time
+                        self.unknown_detected = True
+                    set_servo_angle(0)
+                else:
+                    set_servo_angle(0)
 
-    def update_gui(self):
-        try:
-            frame = self.frame_queue.get_nowait()
-            img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            imgtk = ImageTk.PhotoImage(image=img)
-            self.video_label.imgtk = imgtk
-            self.video_label.configure(image=imgtk)
-        except queue.Empty:
-            pass
+                self.update_status(self.detected_name if self.detected_name else "None")
+
+                img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                imgtk = ImageTk.PhotoImage(image=img)
+                self.video_label.imgtk = imgtk
+                self.video_label.configure(image=imgtk)
+
+            time.sleep(0.05)  # Small delay to avoid overloading CPU
 
     def on_close(self):
         self.running = False
+        self.thread.join()
+        servo_pwm.stop()
+        buzzer_pwm.stop()
         GPIO.cleanup()
-        self.window.quit()
+        self.window.destroy()
 
-# --- Main ---
-window = tk.Tk()
-app = FaceApp(window)
-
-# Update the GUI periodically
-def gui_update():
-    app.update_gui()
-    window.after(50, gui_update)
-
-window.after(50, gui_update)  # Start GUI updates
-window.mainloop()
+# --- Launch GUI ---
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = FaceApp(root)
+    root.mainloop()
