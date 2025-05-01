@@ -19,15 +19,30 @@ import os
 SERVO_PIN = 17
 BUZZER_PIN = 23
 PIR_PIN = 4
+GREEN_LED = 23
+RED_LED = 24
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SERVO_PIN, GPIO.OUT)
 GPIO.setup(BUZZER_PIN, GPIO.OUT)
 GPIO.setup(PIR_PIN, GPIO.IN)
+GPIO.setup(GREEN_LED, GPIO.OUT)
+GPIO.setup(RED_LED, GPIO.OUT)
 servo_pwm = GPIO.PWM(SERVO_PIN, 50)
 servo_pwm.start(0)
 buzzer_pwm = GPIO.PWM(BUZZER_PIN, 1000)
 buzzer_pwm.start(0)
 last_angle = None
+
+def set_led(status):
+    if status == "green":
+        GPIO.output(GREEN_LED, GPIO.HIGH)
+        GPIO.output(RED_LED, GPIO.LOW)
+    elif status == "red":
+        GPIO.output(GREEN_LED, GPIO.LOW)
+        GPIO.output(RED_LED, GPIO.HIGH)
+    elif status == "off":
+        GPIO.output(GREEN_LED, GPIO.LOW)
+        GPIO.output(RED_LED, GPIO.LOW)
 
 def set_servo_angle(angle):
     global last_angle
@@ -256,6 +271,7 @@ class FaceApp:
                 current_time = time.time()
                 if self.detected_name in ["Steven", "Mike"]:
                     set_servo_angle(90)
+                    set_led("green")
                     self.unknown_detected = False
                 elif self.detected_name == "Unknown" or not self.detected_name:
                     if not self.unknown_detected or (current_time - self.last_alert_time > 15):
@@ -265,6 +281,7 @@ class FaceApp:
                         self.last_alert_time = current_time
                         self.unknown_detected = True
                     set_servo_angle(0)
+                    set_led("red")
                 self.update_status(self.detected_name)
                 img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                 imgtk = ImageTk.PhotoImage(image=img)
