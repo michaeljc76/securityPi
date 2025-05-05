@@ -29,3 +29,18 @@ To recognize people, create a folder (e.g. faces/) and put one image of each per
 
 ## Configuring Email Alerts
 Edit emails.txt to change the sending and recieving emails, along with the sender's password
+
+## Running the Project
+Once everything is set up, run the main program:
+```
+python3 detect_gui.py
+```
+You may need sudo if accessing GPIO without permissions. The GUI window will open, showing the camera feed. The program waits for PIR motion, then analyzes faces. On recognized faces, it will rotate the servo 90 degrees to unlock, otherwise it will beep and flash the LED, and send an email to your configured address.
+
+## Troubleshooting
+- Camera not working: Ensure the camera is enabled in raspi-config (Interface Options → Camera) and that the ribbon is seated correctly. Test with libcamera-hello.
+- GPIO Errors: If you see permission errors, run with sudo or add your user to the gpio group. Ensure no other process is using the same GPIO pins.
+- Face Recognition Too Slow: Raspberry Pi may struggle with heavy models. Try reducing frame size or switching to a faster model. Mediapipe and face_detection proved fast and effective in our tests.
+- PIR False Triggers: Adjust the PIR sensor’s dials and verify wiring.
+- Servo Jittering: Check the power supply. If the servo draws too much current, use a separate 5V supply.
+- Email Not Sent: Verify SMTP credentials and network connectivity. Google may block sign-ins, so use an app password.
