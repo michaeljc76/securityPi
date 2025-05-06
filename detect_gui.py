@@ -19,8 +19,8 @@ import os
 SERVO_PIN = 17
 BUZZER_PIN = 23
 PIR_PIN = 4
-GREEN_LED = 22
-RED_LED = 27
+GREEN_LED = 27
+RED_LED = 22
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SERVO_PIN, GPIO.OUT)
 GPIO.setup(BUZZER_PIN, GPIO.OUT)
@@ -281,7 +281,10 @@ class FaceApp:
                         self.last_alert_time = current_time
                         self.unknown_detected = True
                     set_servo_angle(0)
-                    set_led("red")
+                    if self.detected_name == "Unknown":
+                        set_led("red")
+                    else:
+                        set_led("off")
                 self.update_status(self.detected_name)
                 img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                 imgtk = ImageTk.PhotoImage(image=img)
